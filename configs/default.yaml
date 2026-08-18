@@ -1,0 +1,6 @@
+paths:
+  raw_data_dir: data/raw
+  processed_data_dir: data/processed
+  models_dir: models
+  reports_dir: reports
+
