@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Minimal, general Python project scaffold."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "jupyterlab>=4.6.3",
+]
 
 [project.optional-dependencies]
 dev = [

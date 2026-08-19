@@ -24,6 +24,12 @@ Run commands inside the environment:
 uv run <command>
 ```
 
+Preprocess ECG5000 raw files into structured train/test files:
+
+```bash
+uv run python src/preprocess.py
+```
+
 ## Suggested storage locations
 
 - Place original input files in `data/raw/`.
