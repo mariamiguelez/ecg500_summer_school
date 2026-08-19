@@ -1,5 +1,7 @@
 paths:
-  raw_data_dir: data/raw
+  raw_data_dir: data/ECG5000
+  raw_train_file: ECG5000_TRAIN.txt
+  raw_test_file: ECG5000_TEST.txt
   processed_data_dir: data/processed
   models_dir: models
   reports_dir: reports

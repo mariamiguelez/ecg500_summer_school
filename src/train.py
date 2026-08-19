@@ -1,47 +1,81 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
+import sys
 
 import joblib
+import numpy as np
+import pandas as pd
+from sklearn.metrics import accuracy_score, f1_score
+
+SRC_DIR = Path(__file__).resolve().parent
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 from utils import load_config
-from models.baseline import build_baseline_model
-from utils import classification_metrics
+from data_processing.preprocess import main as preprocess_main
+from models.baseline import fit_baseline_model
 
 
 def main() -> None:
-    cfg = load_config("configs/default.yaml")
+
+    # Load data from config file
+    project_root = Path(__file__).resolve().parents[1]
+    cfg = load_config(project_root / "configs" / "default.yaml")
     paths = cfg["paths"]
-    training = cfg["training"]
 
-    x_train, y_train, x_test, y_test = paths
-    model = build_baseline_model()
-    model.fit(x_train, y_train)
+    # Define paths to output
+    processed_dir = project_root / paths["processed_data_dir"]
+    models_dir = project_root / paths["models_dir"]
+    reports_dir = project_root / paths["reports_dir"]
 
-    y_pred_train = model.predict(x_train)
-    y_pred_test = model.predict(x_test)
+    train_path = processed_dir / "train_structured.csv"
+    test_path = processed_dir / "test_structured.csv"
 
-    train_metrics = classification_metrics(y_train, y_pred_train)
-    test_metrics = classification_metrics(y_test, y_pred_test)
+    # Run preprocessing if its not done already
+    if not train_path.exists() or not test_path.exists():
+        print("Structured data not found. Running preprocessing first...")
+        preprocess_main()
 
-    models_dir = Path(paths["models_dir"])
-    reports_dir = Path(paths["reports_dir"])
+    train_data = np.loadtxt(train_path, delimiter=",", skiprows=1)
+    test_data = np.loadtxt(test_path, delimiter=",", skiprows=1)
+
+    # Separate the target labels and hot one encode it
+    x_train = train_data[:, 1:]
+    y_train = train_data[:, 0].astype(int)
+    x_test = test_data[:, 1:]
+    y_test = test_data[:, 0].astype(int)
+
+    model = fit_baseline_model(x_train=x_train, y_train=y_train)
+    y_pred = model.predict(x_test)
+
+    metrics = {
+        "accuracy": float(accuracy_score(y_test, y_pred)),
+        "f1_macro": float(f1_score(y_test, y_pred, average="macro")),
+    }
+
+    # Create dirs to save data
     models_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    joblib.dump(model, models_dir / "baseline.joblib")
+    # Save the model and output
+    model_path = models_dir / "baseline_random_forest.joblib"
+    metrics_path = reports_dir / "train_metrics.csv"
+    predictions_path = reports_dir / "test_predictions.csv"
 
-    with (reports_dir / "train_metrics.json").open("w", encoding="utf-8") as f:
-        json.dump(train_metrics, f, indent=2)
-    with (reports_dir / "test_metrics.json").open("w", encoding="utf-8") as f:
-        json.dump(test_metrics, f, indent=2)
+    joblib.dump(model, model_path)
+    pd.DataFrame([metrics]).to_csv(metrics_path, index=False)
+    pd.DataFrame(
+        {
+            "y_true": y_test,
+            "y_pred": y_pred,
+        }
+    ).to_csv(predictions_path, index=False)
 
-    print("Training complete.")
-    print(f"Saved model to: {models_dir / 'baseline.joblib'}")
-    print(f"Saved reports to: {reports_dir}")
+    print(f"Train shape: {x_train.shape}, Test shape: {x_test.shape}")
+    print(f"Test accuracy: {metrics['accuracy']:.4f}")
+    print(f"Test f1_macro: {metrics['f1_macro']:.4f}")
 
 
 if __name__ == "__main__":
     main()
-
