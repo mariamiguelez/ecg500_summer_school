@@ -250,8 +250,9 @@ def fit_transformer(
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     # Instead of MSE the categories don't have an order
-    criterion = nn.CrossEntropyLoss()
+    weight_tensor = torch.tensor([0.584, 0.354, 0.02, 0.038, 0.004])  # TODO: add to config
 
+    criterion = nn.CrossEntropyLoss(weight=1 - weight_tensor)
     train_losses = []
     val_losses = []
     best_val_loss = float("inf")
