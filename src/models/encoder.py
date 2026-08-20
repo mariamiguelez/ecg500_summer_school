@@ -19,9 +19,12 @@ class EncoderAdapter:
         self.model.eval()
         x_tensor = torch.tensor(x, dtype=torch.float32, device=self.device).unsqueeze(-1)
         with torch.no_grad():
-            logits = self.model(x_tensor)
+            logits = self.model(x_tensor) #obtain logits from the linear prediction which can take any value in R
+            # get the indice with the highest logit value as after transforming to back to
+            # probabilities the same value will have the highest prob
             class_idx = torch.argmax(logits, dim=1).cpu().numpy()
-        return self.classes[class_idx]
+
+        return self.classes[class_idx] # return the class taking the indice with the highes logit
 
 class BaseTransformerClassifier(nn.Module):
     def __init__(
