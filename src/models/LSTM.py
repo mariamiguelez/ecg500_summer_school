@@ -3,13 +3,15 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
 
 class LSTMClassifierAdapter:
     # Used to adapt the format of the repo to the LSTM architecture
-    def __init__(self, model, classes: np.ndarray, device):
+    def __init__(self, model, classes: np.ndarray, device, scaler: StandardScaler | None = None):
         self.model = model
         self.classes = classes
         self.device = device
+        self.scaler = scaler
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         self.model.eval()
@@ -46,6 +48,7 @@ def fit_lstm_model(
     epochs: int = 10,
     batch_size: int = 64,
     learning_rate: float = 0.001,
+    use_scaling: bool = False,
 ) -> LSTMClassifierAdapter:
 
     np.random.seed(random_state)
@@ -57,6 +60,11 @@ def fit_lstm_model(
 
     # Save the index liked to the label
     y_idx = np.array([class_to_idx[label] for label in y_train], dtype=np.int64)
+
+    scaler = None
+    if use_scaling:
+        scaler = StandardScaler()
+        x_train = scaler.fit_transform(x_train.reshape(-1, 1)).reshape(x_train.shape)
 
     # Turns (time, samples) into (time, samples, 1), where: input_size = 1 (one scalar amplitude per time step)
     x_tensor = torch.tensor(x_train, dtype=torch.float32).unsqueeze(-1)
@@ -74,7 +82,10 @@ def fit_lstm_model(
         num_layers=1,
         num_classes=len(classes)).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    criterion = nn.CrossEntropyLoss()
+
+    weight_tensor = torch.tensor([0.584,0.354,0.02,0.038,0.004])  # TODO: add to config
+
+    criterion = nn.CrossEntropyLoss(weight= 1 - weight_tensor)
 
     model.train()
 
@@ -106,4 +117,4 @@ def fit_lstm_model(
     plt.grid(True)
     plt.show()
 
-    return LSTMClassifierAdapter(model=model, classes=classes, device=device)
+    return LSTMClassifierAdapter(model=model, classes=classes, device=device, scaler=scaler)

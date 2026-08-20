@@ -5,7 +5,12 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+)
 from utils import load_config
 from data_processing.preprocess import main as preprocess_main
 
@@ -45,6 +50,29 @@ def _fit_model_from_config(model_cfg: dict[str, Any], x_train: np.ndarray, y_tra
     )
 
 
+def _scale_test_data(
+    x_test: np.ndarray,
+    model: Any,
+    model_cfg: dict[str, Any],
+) -> np.ndarray:
+    fit_params = model_cfg.get("fit_params", {})
+    use_scaling = fit_params.get("use_scaling", False)
+    if not use_scaling:
+        print("No scaling applied on test data")
+        return x_test
+    print("Scaling test data")
+    scaler = getattr(model, "scaler", None)
+    if scaler is None:
+        raise ValueError(
+            "Config sets use_scaling=true, but trained model has no scaler."
+        )
+
+    if x_test.ndim == 2 and getattr(scaler, "n_features_in_", None) == 1:
+        return scaler.transform(x_test.reshape(-1, 1)).reshape(x_test.shape)
+
+    return scaler.transform(x_test)
+
+
 def main() -> None:
     # Load paths
     project_root = Path(__file__).resolve().parents[1]
@@ -71,12 +99,19 @@ def main() -> None:
 
     print('-----------------------------------------')
     print('Saving predictions')
-    y_pred = model.predict(x_test)
+    print('-----------------------------------------')
+    print('Evaluating')
+
+    # sacale only if indicated
+    x_test_s= _scale_test_data(x_test=x_test, model=model, model_cfg=model_cfg)
+    y_pred = model.predict(x_test_s)
 
     # Evaluation
     metrics = {
         "model": selected_model,
         "accuracy": float(accuracy_score(y_test, y_pred)),
+        "precision": float(precision_score(y_test, y_pred,  average="macro")),
+        "recall": float(recall_score(y_test, y_pred, average="macro")),
         "f1_macro": float(f1_score(y_test, y_pred, average="macro")),
     }
 
@@ -97,6 +132,8 @@ def main() -> None:
     ).to_csv(predictions_path, index=False)
 
     print(f"Test accuracy: {metrics['accuracy']:.4f}")
+    print(f"Precision: {metrics['precision']:.2f}")
+    print(f"Recall: {metrics['recall']:.2f}")
     print(f"Test f1_macro: {metrics['f1_macro']:.4f}")
     print(f"Saved model to: {model_path.resolve()}")
     print(f"Saved metrics to: {metrics_path.resolve()}")
