@@ -41,6 +41,10 @@ def main() -> None:
     y_test = test_data[:, 0].astype(int)
 
     model = fit_logistic_model(x_train=x_train, y_train=y_train)
+    #logreg = model.named_steps['classifier']
+    #print(logreg.coef_.shape)
+    #print(logreg.intercept_.shape)
+    #print(model.coef_.size + model.intercept_.size)
     y_pred = model.predict(x_test)
 
     metrics = {
