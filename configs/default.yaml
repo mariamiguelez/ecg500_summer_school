@@ -6,3 +6,48 @@ paths:
   models_dir: models
   reports_dir: reports
 
+models:
+  random_forest:
+    module: models.baseline
+    fit_function: fit_baseline_model
+    artifact_name: baseline_random_forest.joblib
+    random_state: 42
+  logistic_regression:
+    module: models.logistic_baseline
+    fit_function: fit_logistic_model
+    artifact_name: logistic_regression.joblib
+    random_state: 42
+  lstm-weighted:
+    module: models.LSTM
+    fit_function: fit_lstm_model
+    artifact_name: lstm.joblib
+    random_state: 42
+    fit_params:
+      epochs: 500
+      batch_size: 32
+      learning_rate: 0.001
+      use_scaling: false
+  lstm-weighted-scaled:
+    module: models.LSTM
+    fit_function: fit_lstm_model
+    artifact_name: lstm.joblib
+    random_state: 42
+    fit_params:
+      epochs: 500
+      batch_size: 32
+      learning_rate: 0.001
+      use_scaling: true
+  transformer:
+    module: models.encoder
+    fit_function: fit_transformer
+    artifact_name: trasnformer.joblib
+    random_state: 42
+    fit_params:
+      epochs: 500
+      batch_size: 32
+      learning_rate: 0.001
+      use_scaling: true
+
+training:
+  selected_model: transformer
+
