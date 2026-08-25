@@ -8,6 +8,7 @@ from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
+from utils import plot_PCA
 
 from xlstm import (
     xLSTMBlockStack,
@@ -39,6 +40,42 @@ class XLSTMAdapter:
             class_idx = torch.argmax(logits, dim=1).cpu().numpy()
 
         return self.classes[class_idx] # return the class taking the indice with the highes logit
+    def extract_latent_vectors(
+        self,
+        x: np.ndarray,
+        pooling: str = "mean",
+    ) -> np.ndarray:
+        """Extract sequence-level latent vectors from the transformer encoder."""
+        self.model.eval()
+        x_tensor = torch.tensor(x, dtype=torch.float32, device=self.device)
+        with torch.no_grad():
+            z = self.model.encode(x_tensor)  # (B, T, d_model)
+
+            if pooling == "mean":
+                latents = z.mean(dim=1)
+            elif pooling == "last":
+                latents = z[:, -1, :]
+            elif pooling == "flatten":
+                latents = z.flatten(start_dim=1)
+
+        return latents.cpu().numpy()
+
+    def plot_latent_pca(
+        self,
+        x: np.ndarray,
+        labels: np.ndarray | None = None,
+        pooling: str = "mean",
+        output_path: str | None = None,
+        title: str = "2D Projection of Transformer Latent Space",
+    ) -> np.ndarray:
+        """Extract latent vectors and plot them using PCA."""
+        latent_vectors = self.extract_latent_vectors(x=x, pooling=pooling)
+        return plot_PCA(
+            latent_vectors=latent_vectors,
+            labels=labels,
+            output_path=output_path,
+            title=title,
+        )
 
 class MLSTMClassifier(nn.Module):
     def __init__(
@@ -81,17 +118,22 @@ class MLSTMClassifier(nn.Module):
             n_classes,
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
         if x.dim() == 2:
             x = x.unsqueeze(-1)
+        x_embed = self.input_projection(x)  # increase the dimensionality from 6 till the model dimensions
 
-        x = self.input_projection(x) # (B, T, input_size)
+        z = self.encoder(
+            x_embed)  # Contextualized representation (latent_sequence) size (bs, tokens, dim of the model)
+        return z
 
-        z = self.encoder(x) # (B, T, d_model)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        z = self.encode(x)
 
         z_flat = z.flatten(start_dim=1) # (bs, n_timesteps*d_model)
 
-        output = self.output_projection(z_flat) #(bs, 4)
+        output = self.output_projection(z_flat) # (bs, n_classes)
+
         return output
 
 
@@ -135,13 +177,16 @@ class SLSTMClassifier(nn.Module):
             d_model*context_length,
             n_classes,
         )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
         if x.dim() == 2:
             x = x.unsqueeze(-1)
+        x_embed = self.input_projection(x)  # increase the dimensionality from 6 till the model dimensions
+        #x_embed_pe = self.positional_encoding(x_embed)  # Add the positional encoder step
 
-        # 1. Linear projection (B, T, input_size) -> (B, T, d_model)
-        x = self.input_projection(x)
+        z = self.encoder(x_embed)  # Contextualized representation (latent_sequence) size (bs, tokens, dim of the model)
+        return z
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
 
         # (B, T, d_model)
         z = self.encoder(x)
@@ -150,10 +195,8 @@ class SLSTMClassifier(nn.Module):
         # z_last = z[:, -1, :]
         z_flat = z.flatten(start_dim=1) #  # (bs, n_timesteps*d_model)
 
-        output = self.output_projection(z_flat) #(bs, 4)
+        output = self.output_projection(z_flat) #(bs, 5)
 
-        # # (B, n_classes)
-        # output = self.output_projection(z_last)
 
         return output
 
@@ -208,17 +251,18 @@ class XLSTMClassifier(nn.Module):
             d_model * context_length,
             n_classes,
         )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
         if x.dim() == 2:
             x = x.unsqueeze(-1)
+        x_embed = self.input_projection(x)  # increase the dimensionality from 6 till the model dimensions
+        #x_embed_pe = self.positional_encoding(x_embed)  # Add the positional encoder step
 
-        # (B, T, input_size) -> (B, T, d_model)
-        x = self.input_projection(x)
+        z = self.encoder(
+            x_embed)  # Contextualized representation (latent_sequence) size (bs, tokens, dim of the model)
+        return z
 
-        # mLSTM -> sLSTM
-        # (B, T, d_model) -> (B, T, d_model)
-        z = self.encoder(x)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        z = self.encode(x)
 
         # Flatten all temporal representations
         z_flat = z.flatten(start_dim=1)   # (bs, n_timesteps*d_model)

@@ -4,7 +4,6 @@ from pathlib import Path
 import sys
 
 import joblib
-import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, f1_score
 
@@ -21,6 +20,7 @@ def main() -> None:
     project_root = Path(__file__).resolve().parents[1]
     config = load_config(project_root / "configs" / "default.yaml")
     paths = config["paths"]
+    target_column = config.get("training", {}).get("target_column", "target")
 
     processed_dir = project_root / paths["processed_data_dir"]
     models_dir = project_root / paths["models_dir"]
@@ -32,13 +32,17 @@ def main() -> None:
         print("Structured data not found. Running preprocessing first...")
         preprocess_main()
 
-    train_data = np.loadtxt(train_path, delimiter=",", skiprows=1)
-    test_data = np.loadtxt(test_path, delimiter=",", skiprows=1)
+    train_df = pd.read_csv(train_path)
+    test_df = pd.read_csv(test_path)
+    if target_column == "target_binary_gt1_to0" and target_column not in train_df.columns:
+        train_df[target_column] = (train_df["target"].astype(int) <= 1).astype(int)
+        test_df[target_column] = (test_df["target"].astype(int) <= 1).astype(int)
 
-    x_train = train_data[:, 1:]
-    y_train = train_data[:, 0].astype(int)
-    x_test = test_data[:, 1:]
-    y_test = test_data[:, 0].astype(int)
+    feature_columns = [column for column in train_df.columns if column.startswith("x_")]
+    x_train = train_df[feature_columns].to_numpy(dtype=float)
+    y_train = train_df[target_column].to_numpy(dtype=int)
+    x_test = test_df[feature_columns].to_numpy(dtype=float)
+    y_test = test_df[target_column].to_numpy(dtype=int)
 
     model = fit_logistic_model(x_train=x_train, y_train=y_train)
     #logreg = model.named_steps['classifier']

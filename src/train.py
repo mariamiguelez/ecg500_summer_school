@@ -19,7 +19,10 @@ SRC_DIR = Path(__file__).resolve().parent
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-def _load_structured_data(processed_dir: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def _load_structured_data(
+    processed_dir: Path,
+    target_column: str = "target",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     # Load the preprocessed data in and proceed to te train test split
     train_path = processed_dir / "train_structured.csv"
     test_path = processed_dir / "test_structured.csv"
@@ -28,13 +31,35 @@ def _load_structured_data(processed_dir: Path) -> tuple[np.ndarray, np.ndarray, 
         print("Structured data not found. Running preprocessing first...")
         preprocess_main()
 
-    train_data = np.loadtxt(train_path, delimiter=",", skiprows=1)
-    test_data = np.loadtxt(test_path, delimiter=",", skiprows=1)
+    train_df = pd.read_csv(train_path)
+    test_df = pd.read_csv(test_path)
 
-    x_train = train_data[:, 1:]
-    y_train = train_data[:, 0].astype(int)
-    x_test = test_data[:, 1:]
-    y_test = test_data[:, 0].astype(int)
+    # Use the binary target if indicated in the config
+    if target_column == "target_binary":
+        if "target_binary" not in train_df.columns:
+            # Backward-compatible path for old processed files.
+            train_df["target_binary"] = np.where(
+                train_df["target"].astype(int).to_numpy() > 1, 0, train_df["target"].astype(int).to_numpy()
+            )
+            test_df["target_binary"] = np.where(
+                test_df["target"].astype(int).to_numpy() > 1, 0, test_df["target"].astype(int).to_numpy()
+            )
+
+    if target_column not in train_df.columns:
+        raise KeyError(
+            f"Target column '{target_column}' not found in processed data. "
+            "Available columns: "
+            f"{list(train_df.columns)}"
+        )
+
+    feature_columns = [column for column in train_df.columns if column.startswith("x_")]
+    if not feature_columns:
+        raise ValueError("No feature columns found. Expected columns named x_0, x_1, ...")
+
+    x_train = train_df[feature_columns].to_numpy(dtype=float)
+    y_train = train_df[target_column].to_numpy(dtype=int)
+    x_test = test_df[feature_columns].to_numpy(dtype=float)
+    y_test = test_df[target_column].to_numpy(dtype=int)
     return x_train, y_train, x_test, y_test
 
 
@@ -118,7 +143,11 @@ def main() -> None:
     selected_model = training_cfg["selected_model"]
     if selected_model not in models_cfg:
         raise KeyError(f"Model '{selected_model}' not found under 'models' in config.")
-    x_train, y_train, x_test, y_test = _load_structured_data(processed_dir=processed_dir)
+    target_column = training_cfg.get("target_column", "target")
+    x_train, y_train, x_test, y_test = _load_structured_data(
+        processed_dir=processed_dir,
+        target_column=target_column,
+    )
     validation_fraction = training_cfg.get("validation_from_test_fraction",0.5)
 
     x_val, y_val, x_test, y_test = _split_validation_from_test(
@@ -132,6 +161,7 @@ def main() -> None:
         f"Train shape: {x_train.shape}, Validation shape: {x_val.shape if x_val is not None else None}"
         f"Test shape: {x_test.shape}"
     )
+    print(f"Using target column: {target_column}")
     print(f"Performing training on: {selected_model}")
     print('-----------------------------------------')
 
@@ -152,6 +182,14 @@ def main() -> None:
     # sacale only if indicated
     x_test_s= _scale_test_data(x_test=x_test, model=model, model_cfg=model_cfg)
     y_pred = model.predict(x_test_s)
+    if training_cfg.get("plot_latent_space", True):
+        print("Plotting latent space")
+        model.plot_latent_pca(
+            x=x_test,
+            labels=y_test,
+            pooling="flatten",  # or "last", "flatten"
+            output_path= reports_dir / f"pca_{selected_model}.png",
+        )
 
     # Evaluation
     metrics = {

@@ -34,12 +34,26 @@ def _to_structured_array(raw_array: np.ndarray) -> tuple[np.ndarray, str]:
     if raw_array.ndim != 2 or raw_array.shape[1] < 2:
         raise ValueError("Expected a 2D array with at least one label column and one feature column.")
 
-    labels = raw_array[:, 0].astype(int).reshape(-1, 1)
+    labels = raw_array[:, 0].astype(int)
+    # Binary target: class 1 stays 1, classes >1 collapse to 0.
+    target_binary = np.where(labels > 1, 0, labels).astype(int)
     features = raw_array[:, 1:]
-    structured = np.hstack([labels, features])
+    structured = np.hstack(
+        [
+            labels.reshape(-1, 1),
+            target_binary.reshape(-1, 1),
+            features,
+        ]
+    )
 
     n_features = features.shape[1]
-    header = ",".join(["target", *[f"x_{i}" for i in range(n_features)]])
+    header = ",".join(
+        [
+            "target",
+            "target_binary",
+            *[f"x_{i}" for i in range(n_features)],
+        ]
+    )
     return structured, header
 
 

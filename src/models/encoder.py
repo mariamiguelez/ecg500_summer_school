@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
+from utils import plot_PCA
 
 
 class EncoderAdapter:
@@ -26,6 +27,43 @@ class EncoderAdapter:
             class_idx = torch.argmax(logits, dim=1).cpu().numpy()
 
         return self.classes[class_idx] # return the class taking the indice with the highes logit
+
+    def extract_latent_vectors(
+        self,
+        x: np.ndarray,
+        pooling: str = "mean",
+    ) -> np.ndarray:
+        """Extract sequence-level latent vectors from the transformer encoder."""
+        self.model.eval()
+        x_tensor = torch.tensor(x, dtype=torch.float32, device=self.device)
+        with torch.no_grad():
+            z = self.model.encode(x_tensor)  # (B, T, d_model)
+
+            if pooling == "mean":
+                latents = z.mean(dim=1)
+            elif pooling == "last":
+                latents = z[:, -1, :]
+            elif pooling == "flatten":
+                latents = z.flatten(start_dim=1)
+
+        return latents.cpu().numpy()
+
+    def plot_latent_pca(
+        self,
+        x: np.ndarray,
+        labels: np.ndarray | None = None,
+        pooling: str = "mean",
+        output_path: str | None = None,
+        title: str = "2D Projection of Transformer Latent Space",
+    ) -> np.ndarray:
+        """Extract latent vectors and plot them using PCA."""
+        latent_vectors = self.extract_latent_vectors(x=x, pooling=pooling)
+        return plot_PCA(
+            latent_vectors=latent_vectors,
+            labels=labels,
+            output_path=output_path,
+            title=title,
+        )
 
 class BaseTransformerClassifier(nn.Module):
     def __init__(
@@ -55,12 +93,17 @@ class BaseTransformerClassifier(nn.Module):
 
         self.output_projection = nn.Linear(d_model * n_tokens, n_classes)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        if x.dim() == 2:
+            x = x.unsqueeze(-1)
         x_embed = self.input_projection(x) # increase the dimensionality from 6 till the model dimensions
         x_embed_pe = self.positional_encoding(x_embed) # Add the positional encoder step
 
-        z = self.encoder(x_embed_pe)    # Contextualized representation size (bs, tokens, dim of the model)
+        z = self.encoder(x_embed_pe)    # Contextualized representation (latent_sequence) size (bs, tokens, dim of the model)
+        return z
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        z = self.encode(x)
         # The output projecton has the size of (bs, tokens), therefore should be flatten
 
         # Flatten the output of the encoder
@@ -314,7 +357,7 @@ def fit_transformer(
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             best_val_epoch = epoch
-            torch.save(model.state_dict(), "best_model.pth")
+            torch.save(model.state_dict(), "models/best_endoder_model.pth")
 
         print(
             f"Epoch: {epoch + 1:3d} | "
@@ -338,6 +381,7 @@ def fit_transformer(
     plt.legend()
     plt.show()
 
+
     best_model = BaseTransformerClassifier(
         input_size=input_size,
         n_classes=n_classes,
@@ -347,6 +391,6 @@ def fit_transformer(
         num_layers=n_layers,
         n_tokens=n_tokens,
     ).to(device)
-    best_model.load_state_dict(torch.load("best_model.pth", map_location=device))
+    best_model.load_state_dict(torch.load("models/best_endoder_model.pth", map_location=device))
 
     return EncoderAdapter(model=best_model, classes=classes, device=device, scaler=scaler)

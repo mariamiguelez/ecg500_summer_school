@@ -25,7 +25,7 @@ models:
     artifact_name: lstm.joblib
     random_state: 42
     fit_params:
-      loss_weights: [0.004,0.038,0.02,0.354,0.584]
+      loss_weights: [0.5,0.5] #[0.004,0.038,0.02,0.354,0.584]
       epochs: 500
       batch_size: 2084
       learning_rate: 0.001
@@ -69,5 +69,11 @@ models:
       qkv_proj_blocksize: 4
 
 training:
-  selected_model: lstm
-  validation_from_test_fraction: 0
+  selected_model: xlstm
+  target_column: target
+  # Options:
+  # - target (original 5-class label)
+  # - target_binary (class >1 -> 0, class 1 -> 1)
+  validation_from_test_fraction: 0.0
+  split_random_state: 42
+  plot_latent_space: True # Only an option for deep learning models
