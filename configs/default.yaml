@@ -69,6 +69,5 @@ models:
       qkv_proj_blocksize: 4
 
 training:
-  selected_model: xlstm
-  validation_from_test_fraction: 0.5
-
+  selected_model: lstm
+  validation_from_test_fraction: 0

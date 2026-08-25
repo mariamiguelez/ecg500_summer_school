@@ -45,14 +45,18 @@ def _split_validation_from_test(
     random_state: int = 42,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     # Extract the validation data from the test set based on the fraccion defined
-    x_val, x_test_holdout, y_val, y_test_holdout = train_test_split(
-        x_test,
-        y_test,
-        test_size=1.0 - validation_fraction,
-        stratify=y_test,
-        random_state=random_state,
-    )
-    return x_val, y_val, x_test_holdout, y_test_holdout
+    if validation_fraction == 0:
+        print("All the test data will be used for testing. Validation data will be taken from the training set")
+        return None, None, x_test, y_test
+    else:
+        x_val, x_test_holdout, y_val, y_test_holdout = train_test_split(
+            x_test,
+            y_test,
+            test_size= 1.0 - validation_fraction,
+            stratify=y_test,
+            random_state=random_state,
+        )
+        return x_val, y_val, x_test_holdout, y_test_holdout
 
 
 def _fit_model_from_config(
@@ -125,7 +129,7 @@ def main() -> None:
     )
 
     print(
-        f"Train shape: {x_train.shape}, Validation shape: {x_val.shape}, "
+        f"Train shape: {x_train.shape}, Validation shape: {x_val.shape if x_val is not None else None}"
         f"Test shape: {x_test.shape}"
     )
     print(f"Performing training on: {selected_model}")
