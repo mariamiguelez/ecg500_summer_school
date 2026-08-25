@@ -16,6 +16,8 @@ def build_baseline_model(random_state: int = 42) -> RandomForestClassifier:
 def fit_baseline_model(
     x_train: np.ndarray,
     y_train: np.ndarray,
+    x_val: np.ndarray | None = None,
+    y_val: np.ndarray | None = None,
     random_state: int = 42,
 ) -> RandomForestClassifier:
     """Train and return the Random Forest baseline."""

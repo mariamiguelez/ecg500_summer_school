@@ -1,10 +1,12 @@
 import torch
 import time
+import copy
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
 
 class LSTMClassifierAdapter:
     # Used to adapt the format of the repo to the LSTM architecture
@@ -45,6 +47,8 @@ class LSTMClassifier(nn.Module):
 def fit_lstm_model(
     x_train: np.ndarray,
     y_train: np.ndarray,
+    x_val: np.ndarray | None = None,
+    y_val: np.ndarray | None = None,
     loss_weights: np.ndarray = None,
     random_state: int = 42,
     epochs: int = 10,
@@ -59,26 +63,42 @@ def fit_lstm_model(
     np.random.seed(random_state)
     torch.manual_seed(random_state)
 
+    # If there is no validation set provided take a 0.1 portion from the train set
+    if x_val is None or y_val is None:
+        x_train, x_val, y_train, y_val = train_test_split(
+            x_train,
+            y_train,
+            stratify=y_train,
+            test_size=0.1,
+            random_state=random_state,
+        )
+
     # Save classes
-    classes = np.sort(np.unique(y_train))
+    classes = np.sort(np.unique(np.concatenate([y_train, y_val])))
     class_to_idx = {label: i for i, label in enumerate(classes)}
 
     # Save the index liked to the label
     y_idx = np.array([class_to_idx[label] for label in y_train], dtype=np.int64)
+    y_val_idx = np.array([class_to_idx[label] for label in y_val], dtype=np.int64)
 
     scaler = None
     if use_scaling:
         scaler = StandardScaler()
         x_train = scaler.fit_transform(x_train.reshape(-1, 1)).reshape(x_train.shape)
+        x_val = scaler.transform(x_val.reshape(-1, 1)).reshape(x_val.shape)
 
     # Turns (time, samples) into (time, samples, 1), where: input_size = 1 (one scalar amplitude per time step)
     x_tensor = torch.tensor(x_train, dtype=torch.float32).unsqueeze(-1)
 
     # Labels are converted to class indices -> CrossEntropyLoss requires integer class ids (not hot one encoded)
     y_tensor = torch.tensor(y_idx, dtype=torch.long)
+    x_val_tensor = torch.tensor(x_val, dtype=torch.float32).unsqueeze(-1)
+    y_val_tensor = torch.tensor(y_val_idx, dtype=torch.long)
 
     dataset = TensorDataset(x_tensor, y_tensor)
+    val_dataset = TensorDataset(x_val_tensor, y_val_tensor)
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Define model optimizer and criterion
@@ -92,10 +112,12 @@ def fit_lstm_model(
 
     criterion = nn.CrossEntropyLoss(weight= weight_tensor)
 
-    model.train()
-
     train_losses = []
+    val_losses = []
     time_per_epoch = []
+    best_state_dict = copy.deepcopy(model.state_dict())
+    best_val_loss = float("inf")
+    best_val_epoch = 0
 
     for epoch in range(epochs):
         start_time = time.time()  # Start time per epoch
@@ -113,19 +135,43 @@ def fit_lstm_model(
 
         train_loss /= len(train_loader)
         train_losses.append(train_loss)
+        model.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for x_batch, y_batch in val_loader:
+                x_batch = x_batch.to(device)
+                y_batch = y_batch.to(device)
+                logits = model(x_batch)
+                loss = criterion(logits, y_batch)
+                val_loss += loss.item()
+        val_loss /= len(val_loader)
+        val_losses.append(val_loss)
 
-        print(f"Epoch: {epoch + 1:3d} | " f"Train loss: {train_loss:.8f}")
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_val_epoch = epoch
+            best_state_dict = copy.deepcopy(model.state_dict())
+
+        print(
+            f"Epoch: {epoch + 1:3d} | "
+            f"Train loss: {train_loss:.8f} | "
+            f"Val loss: {val_loss:.8f} | "
+            f"Best val epoch: {best_val_epoch + 1}"
+        )
         end_time = time.time()
         time_per_epoch.append(end_time - start_time)  # Appends the time per epoch
     average_time_per_epoch = sum(time_per_epoch) / len(time_per_epoch)
     print(f"Average time per epoch: {average_time_per_epoch:.4f}s")
 
     # Plot loss curve
-    plt.plot(train_losses)
+    plt.plot(train_losses, label="Train loss")
+    plt.plot(val_losses, label="Val loss")
     plt.ylabel("loss")
     plt.xlabel("Epoch")
     plt.yscale("log")
     plt.grid(True)
+    plt.legend()
     plt.show()
 
+    model.load_state_dict(best_state_dict)
     return LSTMClassifierAdapter(model=model, classes=classes, device=device, scaler=scaler)

@@ -185,6 +185,8 @@ class ECGDataset(Dataset):
 def fit_transformer(
         x_train: np.ndarray,
         y_train: np.ndarray,
+        x_val: np.ndarray | None = None,
+        y_val: np.ndarray | None = None,
         random_state: int = 42,
         loss_weights: np.ndarray = None,
         epochs: int = 200,
@@ -199,19 +201,23 @@ def fit_transformer(
 ) -> EncoderAdapter:
     np.random.seed(random_state)
     torch.manual_seed(random_state)
+    # If there is no validation set use 0.1 the split from the train set
+    if x_val is None or y_val is None:
+        x_train, x_val, y_train, y_val = train_test_split(
+            x_train,
+            y_train,
+            stratify=y_train,
+            test_size=0.1,
+            random_state=random_state,
+        )
 
     train_data, train_labels = x_train, y_train
-    classes = np.sort(np.unique(train_labels))
+    # Get unique classes
+    classes = np.sort(np.unique(np.concatenate([y_train, y_val])))
     class_to_idx = {label: i for i, label in enumerate(classes)}
     train_labels_idx = np.array([class_to_idx[label] for label in train_labels], dtype=np.int64)
-
-    train_data, val_data, train_labels_idx, val_labels_idx = train_test_split(
-        train_data,
-        train_labels_idx,
-        stratify=train_labels,
-        test_size=0.1,
-        random_state=42,
-    )
+    val_data = x_val
+    val_labels_idx = np.array([class_to_idx[label] for label in y_val], dtype=np.int64)
     scaler = None
     if use_scaling:
         scaler = StandardScaler()

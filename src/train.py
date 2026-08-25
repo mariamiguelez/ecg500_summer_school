@@ -5,6 +5,7 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -37,7 +38,30 @@ def _load_structured_data(processed_dir: Path) -> tuple[np.ndarray, np.ndarray, 
     return x_train, y_train, x_test, y_test
 
 
-def _fit_model_from_config(model_cfg: dict[str, Any], x_train: np.ndarray, y_train: np.ndarray) -> Any:
+def _split_validation_from_test(
+    x_test: np.ndarray,
+    y_test: np.ndarray,
+    validation_fraction: float,
+    random_state: int = 42,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    # Extract the validation data from the test set based on the fraccion defined
+    x_val, x_test_holdout, y_val, y_test_holdout = train_test_split(
+        x_test,
+        y_test,
+        test_size=1.0 - validation_fraction,
+        stratify=y_test,
+        random_state=random_state,
+    )
+    return x_val, y_val, x_test_holdout, y_test_holdout
+
+
+def _fit_model_from_config(
+    model_cfg: dict[str, Any],
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    x_val: np.ndarray,
+    y_val: np.ndarray,
+) -> Any:
     # Select the model desired and run
     module = importlib.import_module(model_cfg["module"])
     fit_function = getattr(module, model_cfg["fit_function"])
@@ -45,6 +69,8 @@ def _fit_model_from_config(model_cfg: dict[str, Any], x_train: np.ndarray, y_tra
     return fit_function(
         x_train=x_train,
         y_train=y_train,
+        x_val=x_val,
+        y_val=y_val,
         random_state=model_cfg.get("random_state", 42),
         **fit_params,
     )
@@ -89,13 +115,30 @@ def main() -> None:
     if selected_model not in models_cfg:
         raise KeyError(f"Model '{selected_model}' not found under 'models' in config.")
     x_train, y_train, x_test, y_test = _load_structured_data(processed_dir=processed_dir)
+    validation_fraction = training_cfg.get("validation_from_test_fraction",0.5)
 
-    print(f"Train shape: {x_train.shape}, Test shape: {x_test.shape}")
+    x_val, y_val, x_test, y_test = _split_validation_from_test(
+        x_test=x_test,
+        y_test=y_test,
+        validation_fraction=validation_fraction,
+        random_state=42,
+    )
+
+    print(
+        f"Train shape: {x_train.shape}, Validation shape: {x_val.shape}, "
+        f"Test shape: {x_test.shape}"
+    )
     print(f"Performing training on: {selected_model}")
     print('-----------------------------------------')
 
     model_cfg = models_cfg[selected_model]
-    model = _fit_model_from_config(model_cfg=model_cfg, x_train=x_train, y_train=y_train)
+    model = _fit_model_from_config(
+        model_cfg=model_cfg,
+        x_train=x_train,
+        y_train=y_train,
+        x_val=x_val,
+        y_val=y_val,
+    )
 
     print('-----------------------------------------')
     print('Saving predictions')

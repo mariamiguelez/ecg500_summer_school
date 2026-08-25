@@ -26,6 +26,8 @@ def build_logistic_model(random_state: int = 42) -> Pipeline:
 def fit_logistic_model(
     x_train: np.ndarray,
     y_train: np.ndarray,
+    x_val: np.ndarray | None = None,
+    y_val: np.ndarray | None = None,
     random_state: int = 42,
 ) -> Pipeline:
     """Train and return the Logistic Regression baseline."""
