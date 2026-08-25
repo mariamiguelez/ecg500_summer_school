@@ -1,4 +1,5 @@
 import torch
+import time
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
@@ -44,11 +45,15 @@ class LSTMClassifier(nn.Module):
 def fit_lstm_model(
     x_train: np.ndarray,
     y_train: np.ndarray,
+    loss_weights: np.ndarray = None,
     random_state: int = 42,
     epochs: int = 10,
     batch_size: int = 64,
     learning_rate: float = 0.001,
     use_scaling: bool = False,
+    hidden_size: int = 64,
+    n_layers: int = 1
+
 ) -> LSTMClassifierAdapter:
 
     np.random.seed(random_state)
@@ -78,20 +83,22 @@ def fit_lstm_model(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Define model optimizer and criterion
     model = LSTMClassifier(
-        hidden_size=64,  # TODO: add to config
-        num_layers=1,
+        hidden_size=hidden_size,
+        num_layers=n_layers,
         num_classes=len(classes)).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    weight_tensor = torch.tensor([0.584,0.354,0.02,0.038,0.004])  # TODO: add to config
+    weight_tensor = torch.tensor(loss_weights).to(device)
 
-    criterion = nn.CrossEntropyLoss(weight= 1 - weight_tensor)
+    criterion = nn.CrossEntropyLoss(weight= weight_tensor)
 
     model.train()
 
     train_losses = []
+    time_per_epoch = []
 
     for epoch in range(epochs):
+        start_time = time.time()  # Start time per epoch
         model.train()
         train_loss = 0.0
         for x_batch, y_batch in train_loader:
@@ -108,6 +115,10 @@ def fit_lstm_model(
         train_losses.append(train_loss)
 
         print(f"Epoch: {epoch + 1:3d} | " f"Train loss: {train_loss:.8f}")
+        end_time = time.time()
+        time_per_epoch.append(end_time - start_time)  # Appends the time per epoch
+    average_time_per_epoch = sum(time_per_epoch) / len(time_per_epoch)
+    print(f"Average time per epoch: {average_time_per_epoch:.4f}s")
 
     # Plot loss curve
     plt.plot(train_losses)

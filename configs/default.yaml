@@ -12,42 +12,45 @@ models:
     fit_function: fit_baseline_model
     artifact_name: baseline_random_forest.joblib
     random_state: 42
+
   logistic_regression:
     module: models.logistic_baseline
     fit_function: fit_logistic_model
     artifact_name: logistic_regression.joblib
     random_state: 42
-  lstm-weighted:
+
+  lstm:
     module: models.LSTM
     fit_function: fit_lstm_model
     artifact_name: lstm.joblib
     random_state: 42
     fit_params:
+      loss_weights: [0.004,0.038,0.02,0.354,0.584]
       epochs: 500
-      batch_size: 32
-      learning_rate: 0.001
-      use_scaling: false
-  lstm-weighted-scaled:
-    module: models.LSTM
-    fit_function: fit_lstm_model
-    artifact_name: lstm.joblib
-    random_state: 42
-    fit_params:
-      epochs: 500
-      batch_size: 32
+      batch_size: 2084
       learning_rate: 0.001
       use_scaling: true
+      hidden_size: 64
+      n_layers: 1
+
+
   transformer:
     module: models.encoder
     fit_function: fit_transformer
     artifact_name: trasnformer.joblib
     random_state: 42
     fit_params:
-      epochs: 500
-      batch_size: 32
-      learning_rate: 0.001
-      use_scaling: true
+        loss_weights: [0.2,0.2,0.2,0.2,0.2]
+        epochs: 200
+        input_size: 1
+        batch_size: 2084
+        learning_rate: 0.001
+        use_scaling: True
+        d_model: 64
+        dim_ff: 128
+        n_heads: 4
+        n_layers: 2
 
 training:
-  selected_model: transformer
+  selected_model: lstm-weighted-scaled
 

@@ -1,4 +1,5 @@
 import numpy as np
+import time
 import torch
 import torch.nn as nn
 from matplotlib import pyplot as plt
@@ -185,10 +186,16 @@ def fit_transformer(
         x_train: np.ndarray,
         y_train: np.ndarray,
         random_state: int = 42,
-        epochs: int = 10,
+        loss_weights: np.ndarray = None,
+        epochs: int = 200,
+        input_size: int = 1,
         batch_size: int = 64,
         learning_rate: float = 0.001,
         use_scaling: bool = False,
+        d_model: int = 64,
+        dim_ff: int = 128,
+        n_heads: int = 4,
+        n_layers: int = 2,
 ) -> EncoderAdapter:
     np.random.seed(random_state)
     torch.manual_seed(random_state)
@@ -201,6 +208,7 @@ def fit_transformer(
     train_data, val_data, train_labels_idx, val_labels_idx = train_test_split(
         train_data,
         train_labels_idx,
+        stratify=train_labels,
         test_size=0.1,
         random_state=42,
     )
@@ -223,13 +231,7 @@ def fit_transformer(
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 
     ### Initialize model and optimizer
-    input_size = 1
     n_classes = len(classes)
-    # TODO: Add this to the paremeters
-    d_model = 140
-    dim_ff = 128
-    n_heads = 5
-    n_layers = 1
     n_tokens = train_data.shape[1]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -250,15 +252,17 @@ def fit_transformer(
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     # Instead of MSE the categories don't have an order
-    weight_tensor = torch.tensor([0.584, 0.354, 0.02, 0.038, 0.004])  # TODO: add to config
-
-    criterion = nn.CrossEntropyLoss(weight=1 - weight_tensor)
+    weight_tensor = torch.tensor(loss_weights).to(device)
+    criterion = nn.CrossEntropyLoss(weight=weight_tensor)
     train_losses = []
     val_losses = []
     best_val_loss = float("inf")
     best_val_epoch = 0
+    time_per_epoch = []
 
     for epoch in range(epochs):
+        start_time = time.time()  # Start time per epoch
+
         model.train()
         train_loss = 0.0
 
@@ -298,6 +302,8 @@ def fit_transformer(
 
             val_loss /= len(val_loader)
             val_losses.append(val_loss)
+        end_time = time.time()
+        time_per_epoch.append(end_time - start_time)  # Appends the time per epoch
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -313,6 +319,8 @@ def fit_transformer(
             f" | "
             f"Best Val epoch: {best_val_epoch + 1}"
         )
+    average_time_per_epoch = sum(time_per_epoch) / len(time_per_epoch)
+    print(f"Average time per epoch: {average_time_per_epoch:.4f}s")
 
     ### Plot the loss function
     plt.plot(train_losses, label="Train Loss")
