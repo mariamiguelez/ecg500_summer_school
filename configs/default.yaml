@@ -25,7 +25,7 @@ models:
     artifact_name: lstm.joblib
     random_state: 42
     fit_params:
-      loss_weights: [0.5,0.5] #[0.004,0.038,0.02,0.354,0.584]
+      loss_weights: [0.5, 0.5, 1.0]
       epochs: 500
       batch_size: 2084
       learning_rate: 0.001
@@ -39,7 +39,7 @@ models:
     artifact_name: trasnformer.joblib
     random_state: 42
     fit_params:
-        loss_weights: [0.2,0.2,0.2,0.2,0.2]
+        loss_weights: [0.5, 0.5, 1.0]
         epochs: 200
         input_size: 1
         batch_size: 2084
@@ -56,7 +56,7 @@ models:
     artifact_name: xlstm.joblib
     random_state: 42
     fit_params:
-      loss_weights: [ 0.2,0.2,0.2,0.2,0.2 ]
+      loss_weights: [1.0, 1.0, 1.0]
       epochs: 200
       input_size: 1
       batch_size: 2084
@@ -69,11 +69,12 @@ models:
       qkv_proj_blocksize: 4
 
 training:
-  selected_model: xlstm
+  selected_model: transformer
   target_column: target
+  allowed_classes: [1, 2, 3]
   # Options:
   # - target (original 5-class label)
   # - target_binary (class >1 -> 0, class 1 -> 1)
   validation_from_test_fraction: 0.0
   split_random_state: 42
-  plot_latent_space: True # Only an option for deep learning models
+  plot_latent_space: False # Only an option for deep learning models

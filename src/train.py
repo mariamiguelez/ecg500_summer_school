@@ -84,6 +84,32 @@ def _split_validation_from_test(
         return x_val, y_val, x_test_holdout, y_test_holdout
 
 
+def _filter_allowed_classes(
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    x_test: np.ndarray,
+    y_test: np.ndarray,
+    allowed_classes: list[int] | None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    if allowed_classes is None:
+        return x_train, y_train, x_test, y_test
+
+    allowed = np.asarray(allowed_classes, dtype=int)
+    if allowed.size == 0:
+        raise ValueError("allowed_classes must contain at least one class.")
+
+    train_mask = np.isin(y_train, allowed)
+    test_mask = np.isin(y_test, allowed)
+    if not train_mask.any() or not test_mask.any():
+        raise ValueError("allowed_classes removed all training or test samples.")
+
+    x_train = x_train[train_mask]
+    y_train = y_train[train_mask]
+    x_test = x_test[test_mask]
+    y_test = y_test[test_mask]
+    return x_train, y_train, x_test, y_test
+
+
 def _fit_model_from_config(
     model_cfg: dict[str, Any],
     x_train: np.ndarray,
@@ -144,9 +170,17 @@ def main() -> None:
     if selected_model not in models_cfg:
         raise KeyError(f"Model '{selected_model}' not found under 'models' in config.")
     target_column = training_cfg.get("target_column", "target")
+    allowed_classes = training_cfg.get("allowed_classes")
     x_train, y_train, x_test, y_test = _load_structured_data(
         processed_dir=processed_dir,
         target_column=target_column,
+    )
+    x_train, y_train, x_test, y_test = _filter_allowed_classes(
+        x_train=x_train,
+        y_train=y_train,
+        x_test=x_test,
+        y_test=y_test,
+        allowed_classes=allowed_classes,
     )
     validation_fraction = training_cfg.get("validation_from_test_fraction",0.5)
 
@@ -162,6 +196,8 @@ def main() -> None:
         f"Test shape: {x_test.shape}"
     )
     print(f"Using target column: {target_column}")
+    if allowed_classes is not None:
+        print(f"Using allowed classes: {sorted(allowed_classes)}")
     print(f"Performing training on: {selected_model}")
     print('-----------------------------------------')
 
@@ -182,7 +218,7 @@ def main() -> None:
     # sacale only if indicated
     x_test_s= _scale_test_data(x_test=x_test, model=model, model_cfg=model_cfg)
     y_pred = model.predict(x_test_s)
-    if training_cfg.get("plot_latent_space", True):
+    if training_cfg.get("plot_latent_space", True) and hasattr(model, "plot_latent_pca"):
         print("Plotting latent space")
         model.plot_latent_pca(
             x=x_test,
@@ -203,9 +239,14 @@ def main() -> None:
     models_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    model_path = models_dir / model_cfg["artifact_name"]
-    metrics_path = reports_dir / f"train_metrics_{selected_model}.csv"
-    predictions_path = reports_dir / f"test_predictions_{selected_model}.csv"
+    experiment_suffix = ""
+    if allowed_classes is not None:
+        experiment_suffix = "_classes_" + "".join(str(label) for label in sorted(allowed_classes))
+
+    model_artifact = Path(model_cfg["artifact_name"])
+    model_path = models_dir / f"{model_artifact.stem}{experiment_suffix}{model_artifact.suffix}"
+    metrics_path = reports_dir / f"train_metrics_{selected_model}{experiment_suffix}.csv"
+    predictions_path = reports_dir / f"test_predictions_{selected_model}{experiment_suffix}.csv"
 
     joblib.dump(model, model_path)
     pd.DataFrame([metrics]).to_csv(metrics_path, index=False)
