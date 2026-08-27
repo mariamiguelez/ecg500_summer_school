@@ -85,12 +85,13 @@ models:
       qkv_proj_blocksize: 4
 
 training:
-  selected_model: transformer
+  selected_model: random_forest
   target_column: target
   allowed_classes: [1, 2, 3, 4, 5]
   # Options:
   # - target (original 5-class label)
   # - target_binary (class >1 -> 0, class 1 -> 1)
   validation_from_test_fraction: 0.0
+  test_fraction: 0.5
   split_random_state: 42
   plot_latent_space: False # Only an option for deep learning models

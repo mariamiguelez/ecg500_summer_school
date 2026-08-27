@@ -110,6 +110,29 @@ def _filter_allowed_classes(
     return x_train, y_train, x_test, y_test
 
 
+def _split_combined_data(
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    x_test: np.ndarray,
+    y_test: np.ndarray,
+    test_fraction: float,
+    random_state: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    if not 0 < test_fraction < 1:
+        raise ValueError("test_fraction must be between 0 and 1.")
+
+    all_values = np.concatenate([x_train, x_test], axis=0)
+    all_labels = np.concatenate([y_train, y_test], axis=0)
+    x_train_split, x_test_split, y_train_split, y_test_split = train_test_split(
+        all_values,
+        all_labels,
+        test_size=test_fraction,
+        stratify=all_labels,
+        random_state=random_state,
+    )
+    return x_train_split, y_train_split, x_test_split, y_test_split
+
+
 def _fit_model_from_config(
     model_cfg: dict[str, Any],
     x_train: np.ndarray,
@@ -136,6 +159,8 @@ def _scale_test_data(
     model: Any,
     model_cfg: dict[str, Any],
 ) -> np.ndarray:
+    if getattr(model, "handles_input_scaling", False):
+        return x_test
     fit_params = model_cfg.get("fit_params", {})
     use_scaling = fit_params.get("use_scaling", False)
     if not use_scaling:
@@ -182,13 +207,26 @@ def main() -> None:
         y_test=y_test,
         allowed_classes=allowed_classes,
     )
-    validation_fraction = training_cfg.get("validation_from_test_fraction",0.5)
+    split_random_state = training_cfg.get("split_random_state", 42)
+    test_fraction = training_cfg.get("test_fraction")
+    if test_fraction is not None:
+        x_train, y_train, x_test, y_test = _split_combined_data(
+            x_train=x_train,
+            y_train=y_train,
+            x_test=x_test,
+            y_test=y_test,
+            test_fraction=test_fraction,
+            random_state=split_random_state,
+        )
+        print(f"Using stratified combined-data test fraction: {test_fraction}")
+
+    validation_fraction = training_cfg.get("validation_from_test_fraction", 0.0)
 
     x_val, y_val, x_test, y_test = _split_validation_from_test(
         x_test=x_test,
         y_test=y_test,
         validation_fraction=validation_fraction,
-        random_state=42,
+        random_state=split_random_state,
     )
 
     print(
@@ -242,6 +280,8 @@ def main() -> None:
     experiment_suffix = ""
     if allowed_classes is not None:
         experiment_suffix = "_classes_" + "".join(str(label) for label in sorted(allowed_classes))
+    if test_fraction is not None:
+        experiment_suffix += f"_test{int(test_fraction * 100):02d}"
 
     model_artifact = Path(model_cfg["artifact_name"])
     model_path = models_dir / f"{model_artifact.stem}{experiment_suffix}{model_artifact.suffix}"
