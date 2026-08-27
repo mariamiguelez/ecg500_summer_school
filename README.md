@@ -124,5 +124,10 @@ Notes on `loss_weights`:
    ```
 __Note: The HPO is only fitted to the transformer and the xLSTM__
 
-
-
+## Other
+Additional plots can be found in `scr/plots`.
+These scripts are used for 
+- confusion matrix creation
+- plot data characteristics
+- plot special data transformations
+- plot samples grouped by class
