@@ -25,7 +25,7 @@ models:
     artifact_name: lstm.joblib
     random_state: 42
     fit_params:
-      loss_weights: [0.5, 0.5, 1.0]
+      loss_weights: [0.004,0.038,0.02,0.354,0.584]
       epochs: 500
       batch_size: 2084
       learning_rate: 0.001
@@ -39,10 +39,10 @@ models:
     artifact_name: trasnformer.joblib
     random_state: 42
     fit_params:
-        loss_weights: [0.5, 0.5, 1.0]
+        loss_weights: [0.2, 0.2,0.2,0.2,0.2]
         epochs: 200
         input_size: 1
-        batch_size: 2084
+        batch_size: 128
         learning_rate: 0.001
         use_scaling: True
         d_model: 64
@@ -66,13 +66,29 @@ models:
       wavelet: morl
       max_scale: 64
 
+  zero_shot:
+    module: models.zero_shot
+    fit_function: fit_mantisV2_classifier
+    artifact_name: zero_shot_mantisv2.joblib
+    random_state: 42
+    fit_params:
+      epochs: 50
+      batch_size: 64
+      learning_rate: 0.001
+      use_scaling: true
+      model_variant: finetuned # frozen or finetuned
+      target_length: 512
+      plot_losses: false
+      # Update based on selected classes/target setup
+      loss_weights: [1.0, 1.0, 1.0, 1.0, 1.0]
+
   xlstm:
     module: models.xLSTM
     fit_function: fit_xlstm
     artifact_name: xlstm.joblib
     random_state: 42
     fit_params:
-      loss_weights: [1.0, 1.0, 1.0]
+      loss_weights: [0.2, 0.2,0.2,0.2,0.2]
       epochs: 200
       input_size: 1
       batch_size: 2084
@@ -85,9 +101,9 @@ models:
       qkv_proj_blocksize: 4
 
 training:
-  selected_model: transformer
+  selected_model: logistic_regression
   target_column: target
-  allowed_classes: [1, 2, 3]
+  # allowed_classes: [1, 2, 3]
   # Options:
   # - target (original 5-class label)
   # - target_binary (class >1 -> 0, class 1 -> 1)

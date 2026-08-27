@@ -25,6 +25,11 @@ def _plot_class_distribution(
 	train_counts = np.array([(train_labels == label).sum() for label in classes])
 	test_counts = np.array([(test_labels == label).sum() for label in classes])
 
+	train_ditributions = train_counts / train_counts.sum()
+	test_ditributions = test_counts / test_counts.sum()
+	print(train_ditributions)
+	print(test_ditributions)
+
 	positions = np.arange(len(classes))
 	width = 0.38
 	figure, axis = plt.subplots(figsize=(8, 5))
