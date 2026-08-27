@@ -1,0 +1,2 @@
+model,accuracy,precision,recall,f1_macro
+random_forest,0.9504,0.7067738062917057,0.5294266550478903,0.5759149668101864
