@@ -2,6 +2,7 @@ import numpy as np
 import time
 import torch
 import torch.nn as nn
+import pywt
 from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
@@ -11,15 +12,48 @@ from utils import plot_PCA
 
 class EncoderAdapter:
     # Used to adapt this model to the training pipeline interface
-    def __init__(self, model, classes: np.ndarray, device, scaler: StandardScaler | None = None):
+    def __init__(
+        self,
+        model,
+        classes: np.ndarray,
+        device,
+        scales: np.ndarray,
+        wavelet: str,
+        use_wavelet: bool,
+        scaler: StandardScaler | None = None,
+    ):
         self.model = model
         self.classes = classes
         self.device = device
+        self.scales = scales
+        self.wavelet = wavelet
+        self.use_wavelet = use_wavelet
         self.scaler = scaler
+        self.handles_input_scaling = True
+
+    def _transform_batch(self, x: np.ndarray) -> np.ndarray:
+        if not self.use_wavelet:
+            return x[..., None].astype(np.float32)
+
+        transformed = []
+        for series in x:
+            coefficients, _ = pywt.cwt(series, self.scales, self.wavelet)
+            transformed.append(
+                np.stack([coefficients.real, coefficients.imag], axis=-1)
+                .transpose(1, 0, 2)
+                .reshape(len(series), -1)
+                .astype(np.float32)
+            )
+        return np.stack(transformed, axis=0)
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         self.model.eval()
-        x_tensor = torch.tensor(x, dtype=torch.float32, device=self.device).unsqueeze(-1)
+        wavelet_data = self._transform_batch(x)
+        if self.scaler is not None:
+            wavelet_data = self.scaler.transform(
+                wavelet_data.reshape(-1, wavelet_data.shape[-1])
+            ).reshape(wavelet_data.shape)
+        x_tensor = torch.tensor(wavelet_data, dtype=torch.float32, device=self.device)
         with torch.no_grad():
             logits = self.model(x_tensor) #obtain logits from the linear prediction which can take any value in R
             # get the indice with the highest logit value as after transforming to back to
@@ -35,7 +69,12 @@ class EncoderAdapter:
     ) -> np.ndarray:
         """Extract sequence-level latent vectors from the transformer encoder."""
         self.model.eval()
-        x_tensor = torch.tensor(x, dtype=torch.float32, device=self.device)
+        wavelet_data = self._transform_batch(x)
+        if self.scaler is not None:
+            wavelet_data = self.scaler.transform(
+                wavelet_data.reshape(-1, wavelet_data.shape[-1])
+            ).reshape(wavelet_data.shape)
+        x_tensor = torch.tensor(wavelet_data, dtype=torch.float32, device=self.device)
         with torch.no_grad():
             z = self.model.encode(x_tensor)  # (B, T, d_model)
 
@@ -233,7 +272,7 @@ def fit_transformer(
         random_state: int = 42,
         loss_weights: np.ndarray = None,
         epochs: int = 200,
-        input_size: int = 1,
+        input_size: int | None = None,
         batch_size: int = 64,
         learning_rate: float = 0.001,
         use_scaling: bool = False,
@@ -241,6 +280,9 @@ def fit_transformer(
         dim_ff: int = 128,
         n_heads: int = 4,
         n_layers: int = 2,
+        use_wavelet: bool | None = None,
+        wavelet: str = "morl",
+        max_scale: int = 64,
 ) -> EncoderAdapter:
     np.random.seed(random_state)
     torch.manual_seed(random_state)
@@ -254,7 +296,29 @@ def fit_transformer(
             random_state=random_state,
         )
 
-    train_data, train_labels = x_train, y_train
+    scales = np.arange(1, max_scale + 1)
+    if use_wavelet is None:
+        use_wavelet = input_size == 2 * len(scales)
+    input_size = 2 * len(scales) if use_wavelet else 1
+
+    def transform_batch(x: np.ndarray) -> np.ndarray:
+        transformed = []
+        for series in x:
+            coefficients, _ = pywt.cwt(series, scales, wavelet)
+            transformed.append(
+                np.stack([coefficients.real, coefficients.imag], axis=-1)
+                .transpose(1, 0, 2)
+                .reshape(len(series), -1)
+                .astype(np.float32)
+            )
+        return np.stack(transformed, axis=0)
+
+    if use_wavelet:
+        train_data, train_labels = transform_batch(x_train), y_train
+        x_val = transform_batch(x_val)
+    else:
+        train_data, train_labels = x_train[..., None].astype(np.float32), y_train
+        x_val = x_val[..., None].astype(np.float32)
     # Get unique classes
     classes = np.sort(np.unique(np.concatenate([y_train, y_val])))
     class_to_idx = {label: i for i, label in enumerate(classes)}
@@ -316,7 +380,7 @@ def fit_transformer(
         train_loss = 0.0
 
         for x_batch, y_batch in train_loader:
-            x_batch = x_batch.to(device).unsqueeze(-1)
+            x_batch = x_batch.to(device)
             y_batch = y_batch.to(device)
 
             optimizer.zero_grad()
@@ -341,7 +405,7 @@ def fit_transformer(
         with torch.no_grad():
             # Pass each batch from the validation loader into the output
             for x_batch, y_batch in val_loader:
-                x_batch = x_batch.to(device).unsqueeze(-1)
+                x_batch = x_batch.to(device)
                 y_batch = y_batch.to(device)
                 predictions = model(x_batch)
 
@@ -393,4 +457,12 @@ def fit_transformer(
     ).to(device)
     best_model.load_state_dict(torch.load("models/best_endoder_model.pth", map_location=device))
 
-    return EncoderAdapter(model=best_model, classes=classes, device=device, scaler=scaler)
+    return EncoderAdapter(
+        model=best_model,
+        classes=classes,
+        device=device,
+        scales=scales,
+        wavelet=wavelet,
+        use_wavelet=use_wavelet,
+        scaler=scaler,
+    )

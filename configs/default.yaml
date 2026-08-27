@@ -39,7 +39,7 @@ models:
     artifact_name: trasnformer.joblib
     random_state: 42
     fit_params:
-        loss_weights: [0.5, 0.5, 1.0]
+        loss_weights: [0.5, 0.5, 1.0, 1.0, 1.0]
         epochs: 200
         input_size: 1
         batch_size: 2084
@@ -49,7 +49,7 @@ models:
         dim_ff: 128
         n_heads: 4
         n_layers: 2
-        use_wavelet: true
+        use_wavelet: false
         wavelet: morl
         max_scale: 64
 
@@ -87,7 +87,7 @@ models:
 training:
   selected_model: transformer
   target_column: target
-  allowed_classes: [1, 2, 3]
+  allowed_classes: [1, 2, 3, 4, 5]
   # Options:
   # - target (original 5-class label)
   # - target_binary (class >1 -> 0, class 1 -> 1)
