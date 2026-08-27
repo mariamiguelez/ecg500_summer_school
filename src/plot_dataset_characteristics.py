@@ -57,8 +57,17 @@ def _calculate_characteristics(labels: np.ndarray, values: np.ndarray) -> pd.Dat
     for target_class in np.sort(np.unique(labels)):
         class_values = values[labels == target_class]
         peak_indices = np.argmax(class_values, axis=1)
+        valley_indices = np.argmin(class_values, axis=1)
         series_means = class_values.mean(axis=1)
         series_stds = class_values.std(axis=1)
+        first_25_sum = class_values[:, :25].sum(axis=1)
+        last_25_sum = class_values[:, -25:].sum(axis=1)
+        sum_ratio = np.divide(
+            first_25_sum,
+            last_25_sum,
+            out=np.full_like(first_25_sum, np.nan),
+            where=last_25_sum != 0,
+        )
         centered_values = class_values - series_means[:, None]
         autocorrelation = {}
         for lag in (1, 5, 10):
@@ -81,21 +90,25 @@ def _calculate_characteristics(labels: np.ndarray, values: np.ndarray) -> pd.Dat
             pd.DataFrame(
                 {
                     "target": target_class,
-                    "series_mean": series_means,
-                    "series_std": series_stds,
-                    "coefficient_of_variation": np.divide(
-                        series_stds,
-                        series_means,
-                        out=np.full_like(series_stds, np.nan),
-                        where=series_means != 0,
-                    ),
-                    "minimum": class_values.min(axis=1),
-                    "maximum": class_values.max(axis=1),
+                    #"series_mean": series_means,
+                    #"series_std": series_stds,
+                    #"coefficient_of_variation": np.divide(
+                    #    series_stds,
+                    #   series_means,
+                    #    out=np.full_like(series_stds, np.nan),
+                    #    where=series_means != 0,
+                    #),
+                    #"minimum": class_values.min(axis=1),
+                    #"maximum": class_values.max(axis=1),
                     "amplitude_range": class_values.ptp(axis=1),
-                    "peak_value": class_values.max(axis=1),
+                    #"peak_value": class_values.max(axis=1),
                     "peak_time_point": time_points[peak_indices],
-                    "area_under_curve": np.trapz(class_values, axis=1),
-                    **autocorrelation,
+                    "valley_time_point": time_points[valley_indices],
+                    "first_25_sum": first_25_sum,
+                    "last_25_sum": last_25_sum,
+                    "sum_ratio": sum_ratio,
+                    "area_under_curve": np.trapz(class_values, axis=1)
+                    #**autocorrelation,
                 }
             )
         )
@@ -147,12 +160,13 @@ def _plot_autocorrelation(
 
 def _plot_characteristics(characteristics: pd.DataFrame, output_path: Path) -> None:
     feature_columns = [
-        "series_mean",
-        "series_std",
-        "coefficient_of_variation",
-        "amplitude_range",
         "peak_time_point",
+        "valley_time_point",
+        "amplitude_range",
         "area_under_curve",
+        "first_25_sum",
+        "last_25_sum",
+        "sum_ratio"
     ]
     classes = np.sort(characteristics["target"].unique())
     figure, axes = plt.subplots(1, len(feature_columns), figsize=(18, 5))
