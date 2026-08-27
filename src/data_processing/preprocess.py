@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 from pathlib import Path
 import sys
+import pandas as pd
 
 SRC_DIR = Path(__file__).resolve().parents[1]
 if str(SRC_DIR) not in sys.path:
@@ -10,6 +11,29 @@ if str(SRC_DIR) not in sys.path:
 
 from utils import load_config
 
+def calculate_new_features(
+    data: np.ndarray # data without the target label
+) -> pd.DataFrame:
+    new_features = pd.DataFrame()
+    print(data.shape)
+
+    new_features['peak_time_point'] = np.argmax(data, axis=1)
+    new_features['min_time_point'] = np.argmin(data, axis=1)
+    new_features['amplitude_range'] = np.ptp(data, axis=1)
+    new_features['AUC'] = np.trapezoid(data, axis=1)
+    new_features['sum_first_25'] = data[ :, :25].sum(axis=1)
+    new_features['sum_last_25'] = data[:,-25:].sum(axis=1)
+    denominator = new_features['sum_last_25'].to_numpy()
+    numerator = new_features['sum_first_25'].to_numpy()
+    new_features['ratio_25'] = np.divide(
+        numerator,
+        denominator,
+        out=np.zeros_like(numerator, dtype=float),
+        where=denominator != 0,
+    )
+
+
+    return new_features
 
 def _resolve_raw_files(
     project_root: Path,
@@ -38,20 +62,26 @@ def _to_structured_array(raw_array: np.ndarray) -> tuple[np.ndarray, str]:
     # Binary target: class 1 stays 1, classes >1 collapse to 0.
     target_binary = np.where(labels > 1, 0, labels).astype(int)
     features = raw_array[:, 1:]
+    new_features = calculate_new_features(features)
+    new_feature_values = new_features.to_numpy(dtype=float)
     structured = np.hstack(
         [
             labels.reshape(-1, 1),
             target_binary.reshape(-1, 1),
             features,
+            new_feature_values,
         ]
     )
 
     n_features = features.shape[1]
+    new_feature_names = list(new_features.columns)
+
     header = ",".join(
         [
             "target",
             "target_binary",
             *[f"x_{i}" for i in range(n_features)],
+            *new_feature_names,
         ]
     )
     return structured, header
