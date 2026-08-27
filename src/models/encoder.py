@@ -280,14 +280,11 @@ def fit_transformer(
         dim_ff: int = 128,
         n_heads: int = 4,
         n_layers: int = 2,
-<<<<<<< HEAD
         use_wavelet: bool | None = None,
         wavelet: str = "morl",
         max_scale: int = 64,
-=======
         plot_losses: bool = True, # Option to plot loss
 
->>>>>>> 88c463835c6d5ad609cd03f3a3c3e8961499a61e
 ) -> EncoderAdapter:
     np.random.seed(random_state)
     torch.manual_seed(random_state)

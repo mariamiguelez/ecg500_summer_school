@@ -39,11 +39,7 @@ models:
     artifact_name: trasnformer.joblib
     random_state: 42
     fit_params:
-<<<<<<< HEAD
-        loss_weights: [0.5, 0.5, 1.0, 1.0, 1.0]
-=======
         loss_weights: [0.2, 0.2,0.2,0.2,0.2]
->>>>>>> 88c463835c6d5ad609cd03f3a3c3e8961499a61e
         epochs: 200
         input_size: 1
         batch_size: 128
@@ -105,15 +101,9 @@ models:
       qkv_proj_blocksize: 4
 
 training:
-<<<<<<< HEAD
   selected_model: random_forest
   target_column: target
   allowed_classes: [1, 2, 3, 4, 5]
-=======
-  selected_model: logistic_regression
-  target_column: target
-  # allowed_classes: [1, 2, 3]
->>>>>>> 88c463835c6d5ad609cd03f3a3c3e8961499a61e
   # Options:
   # - target (original 5-class label)
   # - target_binary (class >1 -> 0, class 1 -> 1)
