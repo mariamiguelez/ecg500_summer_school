@@ -7,13 +7,16 @@ requires-python = ">=3.11"
 dependencies = [
     "joblib>=1.4.2",
     "jupyterlab>=4.6.3",
+    "mantis-tsfm>=1.1.0",
     "matplotlib>=3.9.0",
     "numpy>=2.4.6",
+    "optuna>=4.9.0",
     "pandas>=2.2.3",
     "PyWavelets>=1.8.0",
     "pyyaml>=6.0.0",
     "scikit-learn>=1.5.2",
     "torch>=2.4.1",
+    "xlstm>=2.0.5",
 ]
 
 [project.optional-dependencies]
