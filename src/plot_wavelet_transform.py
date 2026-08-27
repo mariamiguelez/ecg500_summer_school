@@ -51,9 +51,15 @@ def _plot_mean_scalograms(
         axis.set_title("Wavelet magnitude of class-mean signal")
 
     axes[-1, 0].set_xlabel("Time point")
-    figure.colorbar(image, ax=axes[:, 0].tolist(), label="Coefficient magnitude")
+    figure.subplots_adjust(right=0.86, top=0.94, hspace=0.35)
+    figure.colorbar(
+        image,
+        ax=axes[:, 0].tolist(),
+        label="Coefficient magnitude",
+        fraction=0.03,
+        pad=0.04,
+    )
     figure.suptitle(f"CWT of full ECG5000 dataset class means ({wavelet})", y=0.995)
-    figure.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output_path, dpi=160, bbox_inches="tight")
     plt.close(figure)
