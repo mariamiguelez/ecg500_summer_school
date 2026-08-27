@@ -303,6 +303,7 @@ def fit_xlstm(
         n_heads: int = 4,
         conv1d_kernel_size: int = 4,
         qkv_proj_blocksize: int = 4,
+        plot_losses: bool = True,
 ) -> XLSTMAdapter                                                                                 :
     np.random.seed(random_state)
     torch.manual_seed(random_state)
@@ -371,6 +372,11 @@ def fit_xlstm(
     # Instead of MSE the categories don't have an order
     weight_tensor = torch.tensor(loss_weights).to(device)
     criterion = nn.CrossEntropyLoss(weight=weight_tensor)
+
+    early_stopping_patience = 20
+    early_stopping_min_delta = 0.0
+    epochs_without_improvement = 0
+
     train_losses = []
     val_losses = []
     best_val_loss = float("inf")
@@ -384,9 +390,7 @@ def fit_xlstm(
         train_loss = 0.0
 
         for x_batch, y_batch in train_loader:
-            x_batch = x_batch.to(device)
-            if x_batch.dim() == 2:
-                x_batch = x_batch.unsqueeze(-1)
+            x_batch = x_batch.to(device).unsqueeze(-1)
             y_batch = y_batch.to(device)
 
             optimizer.zero_grad()
@@ -411,9 +415,7 @@ def fit_xlstm(
         with torch.no_grad():
             # Pass each batch from the validation loader into the output
             for x_batch, y_batch in val_loader:
-                x_batch = x_batch.to(device)
-                if x_batch.dim() == 2:
-                    x_batch = x_batch.unsqueeze(-1)
+                x_batch = x_batch.to(device).unsqueeze(-1)
                 y_batch = y_batch.to(device)
                 predictions = model(x_batch)
 
@@ -426,10 +428,13 @@ def fit_xlstm(
         end_time = time.time()
         time_per_epoch.append(end_time - start_time)  # Appends the time per epoch
 
-        if val_loss < best_val_loss:
+        if val_loss < (best_val_loss - early_stopping_min_delta):
             best_val_loss = val_loss
             best_val_epoch = epoch
-            torch.save(model.state_dict(), "models/best_xlstm_model.pth")
+            epochs_without_improvement = 0
+            torch.save(model.state_dict(), "models/best_endoder_model.pth")
+        else:
+            epochs_without_improvement += 1
 
         print(
             f"Epoch: {epoch + 1:3d} | "
@@ -440,18 +445,32 @@ def fit_xlstm(
             f" | "
             f"Best Val epoch: {best_val_epoch + 1}"
         )
+
+        if (
+                early_stopping_patience is not None
+                and early_stopping_patience > 0
+                and epochs_without_improvement >= early_stopping_patience
+        ):
+            print(
+                "Early stopping triggered: "
+                f"no validation improvement for {early_stopping_patience} epochs."
+            )
+            break
     average_time_per_epoch = sum(time_per_epoch) / len(time_per_epoch)
     print(f"Average time per epoch: {average_time_per_epoch:.4f}s")
 
     ### Plot the loss function
-    plt.plot(train_losses, label="Train Loss")
-    plt.plot(val_losses, label="Val Loss")
-    plt.ylabel("Loss", fontsize=12)
-    plt.xlabel("Epoch", fontsize=12)
-    plt.yscale("log")
-    plt.grid(linestyle="dashed")
-    plt.legend()
-    plt.show()
+    if plot_losses:
+        plt.figure()
+        plt.plot(train_losses, label="Train Loss")
+        plt.plot(val_losses, label="Val Loss")
+        plt.ylabel("Loss", fontsize=12)
+        plt.xlabel("Epoch", fontsize=12)
+        plt.yscale("log")
+        plt.grid(linestyle="dashed")
+        plt.legend()
+        plt.show()
+        plt.close()
 
     ### Model Testing
     best_model = XLSTMClassifier(
