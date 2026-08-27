@@ -280,9 +280,14 @@ def fit_transformer(
         dim_ff: int = 128,
         n_heads: int = 4,
         n_layers: int = 2,
+<<<<<<< HEAD
         use_wavelet: bool | None = None,
         wavelet: str = "morl",
         max_scale: int = 64,
+=======
+        plot_losses: bool = True, # Option to plot loss
+
+>>>>>>> 88c463835c6d5ad609cd03f3a3c3e8961499a61e
 ) -> EncoderAdapter:
     np.random.seed(random_state)
     torch.manual_seed(random_state)
@@ -371,6 +376,9 @@ def fit_transformer(
     val_losses = []
     best_val_loss = float("inf")
     best_val_epoch = 0
+    early_stopping_patience = 20
+    early_stopping_min_delta = 0.0
+    epochs_without_improvement = 0
     time_per_epoch = []
 
     for epoch in range(epochs):
@@ -418,10 +426,13 @@ def fit_transformer(
         end_time = time.time()
         time_per_epoch.append(end_time - start_time)  # Appends the time per epoch
 
-        if val_loss < best_val_loss:
+        if val_loss < (best_val_loss - early_stopping_min_delta):
             best_val_loss = val_loss
             best_val_epoch = epoch
+            epochs_without_improvement = 0
             torch.save(model.state_dict(), "models/best_endoder_model.pth")
+        else:
+            epochs_without_improvement += 1
 
         print(
             f"Epoch: {epoch + 1:3d} | "
@@ -432,18 +443,32 @@ def fit_transformer(
             f" | "
             f"Best Val epoch: {best_val_epoch + 1}"
         )
+
+        if (
+            early_stopping_patience is not None
+            and early_stopping_patience > 0
+            and epochs_without_improvement >= early_stopping_patience
+        ):
+            print(
+                "Early stopping triggered: "
+                f"no validation improvement for {early_stopping_patience} epochs."
+            )
+            break
     average_time_per_epoch = sum(time_per_epoch) / len(time_per_epoch)
     print(f"Average time per epoch: {average_time_per_epoch:.4f}s")
 
     ### Plot the loss function
-    plt.plot(train_losses, label="Train Loss")
-    plt.plot(val_losses, label="Val Loss")
-    plt.ylabel("Loss", fontsize=12)
-    plt.xlabel("Epoch", fontsize=12)
-    plt.yscale("log")
-    plt.grid(linestyle="dashed")
-    plt.legend()
-    plt.show()
+    if plot_losses:
+        plt.figure()
+        plt.plot(train_losses, label="Train Loss")
+        plt.plot(val_losses, label="Val Loss")
+        plt.ylabel("Loss", fontsize=12)
+        plt.xlabel("Epoch", fontsize=12)
+        plt.yscale("log")
+        plt.grid(linestyle="dashed")
+        plt.legend()
+        plt.show()
+        plt.close()
 
 
     best_model = BaseTransformerClassifier(
