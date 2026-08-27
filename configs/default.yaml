@@ -49,6 +49,22 @@ models:
         dim_ff: 128
         n_heads: 4
         n_layers: 2
+        use_wavelet: true
+        wavelet: morl
+        max_scale: 64
+
+  cnn_wavelet:
+    module: models.cnn_wavelet
+    fit_function: fit_cnn_wavelet
+    artifact_name: cnn_wavelet.joblib
+    random_state: 42
+    fit_params:
+      loss_weights: [1.0, 1.0, 2.0, 3.0, 3.0]
+      epochs: 20
+      batch_size: 64
+      learning_rate: 0.001
+      wavelet: morl
+      max_scale: 64
 
   xlstm:
     module: models.xLSTM
